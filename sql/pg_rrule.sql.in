@@ -26,7 +26,7 @@ CREATE OR REPLACE FUNCTION rrule_out(rrule)
 CREATE TYPE rrule (
    input = rrule_in,
    output = rrule_out,
-   internallength = 2760 -- TODO: check sizeof(icalrecurrencetype) on 32-bit machine
+   internallength = 2896 -- CRITICAL: Must match the size of 'icalrecurrencetype' in the current version of libical. cf ASSERT in pg_rrule.c
 );
 
 

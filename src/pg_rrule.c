@@ -32,9 +32,39 @@ Datum pg_rrule_in(PG_FUNCTION_ARGS) {
                  errmsg("Invalid RRULE frequency. RRULE \"%s\".", rrule_str)));
     }
 
+    // Need to copy result to palloc'd memory
     struct icalrecurrencetype* recurrence_ref = palloc(sizeof(struct icalrecurrencetype));
+    memcpy(recurrence_ref, &recurrence, sizeof(struct icalrecurrencetype));
+    
+    // Be sure to copy the strings using the pstrdup function
+    if (recurrence.rscale) {
+        recurrence_ref->rscale = pstrdup(recurrence.rscale);
+    }
 
-    (*recurrence_ref) = recurrence;
+    // TODO: do we also need to copy the zone? 
+    // Tried the below but 'icaltimezone' is an opaque type and we can't access the size
+    //
+    // if (recurrence.until.zone) {
+    //     struct icaltimezone* cloned_zone = palloc(sizeof(struct icaltimezone));
+    //     memcpy(cloned_zone, recurrence.until.zone, sizeof(struct icaltimezone));
+    //     recurrence_ref->until.zone = cloned_zone;
+    // }
+
+    // log_recurrence(recurrence_ref);
+
+    // Below is a critical assert, 
+    // to be sure the size of icalrecurrencetype in the current version of libical 
+    // matches the size of the custom RRULE type defined in pg_rrule/sql/pg_rrule.sql.in
+    //
+    // CREATE TYPE rrule (
+    //    input = rrule_in,
+    //    output = rrule_out,
+    //    internallength = 2896 
+    // );
+    //
+    // If a new version of libical changes the size of icalrecurrencetype, we need to fail here
+    // so that we are aware of the change. 
+    assert(sizeof(struct icalrecurrencetype)==2896);
 
     PG_RETURN_POINTER(recurrence_ref);
 }
@@ -127,8 +157,9 @@ Datum pg_rrule_get_occurrences_dtstart(PG_FUNCTION_ARGS) {
 
 Datum pg_rrule_get_occurrences_dtstart_until(PG_FUNCTION_ARGS) {
     struct icalrecurrencetype* recurrence_ref = (struct icalrecurrencetype*)PG_GETARG_POINTER(0);
+
     Timestamp dtstart_ts = PG_GETARG_TIMESTAMP(1);
-    Timestamp until_ts = PG_GETARG_TIMESTAMPTZ(2);
+    Timestamp until_ts = PG_GETARG_TIMESTAMP(2);
 
     pg_time_t dtstart_ts_pg_time_t = timestamptz_to_time_t(dtstart_ts);
     pg_time_t until_ts_pg_time_t = timestamptz_to_time_t(until_ts);
